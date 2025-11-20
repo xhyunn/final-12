@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>오감교차 교실 | Sensory Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow-x: hidden;
+      background: #faf8f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+    }
+
+    /* INTRO */
+    #intro {
+      width: 100vw;
+      min-height: 100vh;
+    }
+    .intro-page {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 0 40px;
+    }
+    #enterMapBtn {
+      padding: 14px 32px;
+      font-size: 1rem;
+      border: none;
+      border-radius: 999px;
+      background: #111;
+      color: white;
+      margin-top: 20px;
+      cursor: pointer;
+    }
+
+    /* MAP */
+    #mapContainer {
+      position: fixed;
+      inset: 0;
+      display: none;
+      background: radial-gradient(circle at top, #ffffff 0, #f6f2ec 40%, #efe4d7 100%);
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    /* POLAROID */
+    #polaroidCard {
+      position: fixed;
+      display: none;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .polaroid {
+      width: 260px;
+      padding: 16px 16px 28px;
+      background: #fff;
+      border-radius: 6px;
+      transform: translate(-50%, -50%);
+      box-shadow: 0px 14px 40px rgba(0,0,0,0.18);
+    }
+    .polaroid img {
+      width: 100%;
+      border-radius: 4px;
+    }
+    .caption {
+      margin-top: 8px;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    /* DETAIL PANEL */
+    #detailPanel {
+      width: 360px;
+      height: 100vh;
+      background: #fff;
+      position: fixed;
+      top: 0;
+      right: -360px;
+      padding: 24px;
+      box-shadow: -8px 0 30px rgba(0,0,0,0.12);
+      transition: right 0.35s ease;
+      z-index: 10;
+    }
+    #detailPanel.open {
+      right: 0;
+    }
+    #closePanel {
+      padding: 6px 14px;
+      background: #111;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    #panelImg {
+      width: 100%;
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+    #panelTitle {
+      margin-top: 16px;
+      font-size: 1.2rem;
+    }
+    #panelText {
+      font-size: 0.95rem;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+    .sense-bar {
+      display: flex;
+      align-items: center;
+      margin: 6px 0;
+      font-size: 0.85rem;
+    }
+    .sense-label {
+      width: 45px;
+    }
+    .sense-track {
+      flex: 1;
+      height: 6px;
+      background: #eee6dd;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .sense-fill {
+      height: 100%;
+      border-radius: 999px;
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- INTRO -->
+<section id="intro">
+  <div class="intro-page">
+    <h1>오감교차 교실</h1>
+    <p>우리는 각기 다른 오감의 비율로 장면을 느낍니다.<br>
+       그 감각의 패턴을 지도처럼 펼쳐보는 실험입니다.</p>
+    <button id="enterMapBtn">감각 지도 탐험하기</button>
+  </div>
+</section>
+
+<!-- MAP -->
+<div id="mapContainer">
+  <svg id="map"></svg>
+</div>
+
+<!-- POLAROID -->
+<div id="polaroidCard">
+  <div class="polaroid">
+    <img id="cardImg" src="">
+    <div class="caption" id="cardCaption"></div>
+  </div>
+</div>
+
+<!-- DETAIL PANEL -->
+<div id="detailPanel">
+  <button id="closePanel">닫기</button>
+  <h2 id="panelTitle"></h2>
+  <img id="panelImg" src="">
+  <p id="panelText"></p>
+  <div id="panelSenses"></div>
+</div>
+
+<script>
+/* INTRO → MAP */
+document.getElementById("enterMapBtn").onclick = () => {
+  document.getElementById("intro").style.display = "none";
+  document.getElementById("mapContainer").style.display = "block";
+};
+
+/* 팔레트 */
+const senseColors = {
+  sight: "#E8C547", // 시각
+  sound: "#5A7EBF", // 청각
+  touch: "#D86C5B", // 촉각
+  smell: "#7BA77B", // 후각
+  taste: "#B58CB5"  // 미각
+};
+
+/* 프로토타입 */
+const senseTypes = [
+  {
+    key: "시각",
+    id: "sight",
+    img: "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1200&q=80",
+    text: "빛과 형태, 대비가 강하게 남는 장면.",
+    senses: { sight: 70, sound: 10, touch: 5, taste: 5, smell: 10 }
+  },
+  {
+    key: "청각",
+    id: "sound",
+    img: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=1200&q=80",
+    text: "소리의 크기와 리듬이 먼저 다가오는 순간.",
+    senses: { sight: 20, sound: 60, touch: 10, taste: 0, smell: 10 }
+  },
+  {
+    key: "촉각",
+    id: "touch",
+    img: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1200&q=80",
+    text: "온도와 질감, 압력이 몸에 먼저 기록되는 경험.",
+    senses: { sight: 25, sound: 15, touch: 45, taste: 5, smell: 10 }
+  },
+  {
+    key: "후각",
+    id: "smell",
+    img: "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=1200&q=80",
+    text: "공기 중의 냄새가 기억을 불러오는 장면.",
+    senses: { sight: 25, sound: 15, touch: 10, taste: 5, smell: 45 }
+  },
+  {
+    key: "미각",
+    id: "taste",
+    img: "https://images.unsplash.com/photo-1514996937319-344454492b37?auto=format&fit=crop&w=1200&q=80",
+    text: "혀 위에서 먼저 반응이 시작되는 경험.",
+    senses: { sight: 20, sound: 10, touch: 10, taste: 40, smell: 20 }
+  }
+];
+
+/* 데이터 생성: 감각별 60개씩 = 300 + 혼합 80개 정도 */
+let data = [];
+senseTypes.forEach(type => {
+  for (let i = 0; i < 60; i++) {
+    const base = type.senses;
+    const jitter = v => Math.max(0, Math.min(100, v + (Math.random()*16 - 8)));
+    data.push({
+      scene: `${type.key}형 ${i + 1}`,
+      img: type.img,
+      text: type.text,
+      sight: Math.round(jitter(base.sight)),
+      sound: Math.round(jitter(base.sound)),
+      touch: Math.round(jitter(base.touch)),
+      taste: Math.round(jitter(base.taste)),
+      smell: Math.round(jitter(base.smell)),
+      isBlend: false
+    });
+  }
+});
+
+/* 그라디언트 혼합 점 */
+function mixColors(c1, c2, t) {
+  const a = d3.color(c1);
+  const b = d3.color(c2);
+  const r = a.r + (b.r - a.r) * t;
+  const g = a.g + (b.g - a.g) * t;
+  const bl = a.b + (b.b - a.b) * t;
+  return `rgb(${r},${g},${bl})`;
+}
+
+const senses = ["sight","sound","touch","smell","taste"];
+let blends = [];
+for (let i = 0; i < 80; i++) {
+  const c1 = senses[Math.floor(Math.random()*senses.length)];
+  let c2 = senses[Math.floor(Math.random()*senses.length)];
+  if (c1 === c2) continue;
+  blends.push({
+    scene: "혼합감각",
+    img: senseTypes[Math.floor(Math.random()*senseTypes.length)].img,
+    text: "두 감각이 만나는 지점의 혼합 패턴.",
+    sight: 20, sound: 20, touch: 20, taste: 20, smell: 20,
+    isBlend: true,
+    c1, c2,
+    ratio: Math.random()
+  });
+}
+data = data.concat(blends);
+
+/* 가장 강한 감각 */
+function dominantSense(d) {
+  if (d.isBlend) return null;
+  const v = { sight:d.sight, sound:d.sound, touch:d.touch, smell:d.smell, taste:d.taste };
+  return Object.keys(v).reduce((a,b)=>v[a]>v[b]?a:b);
+}
+
+/* D3 기본 */
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+const svg = d3.select("#map").attr("width", width).attr("height", height);
+const g = svg.append("g");
+
+/* 줌 */
+svg.call(
+  d3.zoom().scaleExtent([0.3, 5]).on("zoom", e => g.attr("transform", e.transform))
+);
+
+/* 마우스 위치 */
+let mousePos = { x: width/2, y: height/2 };
+
+/* 감각별 클러스터 중심 (전체 하나의 구름 모양을 만들도록 배치) */
+const senseCenters = {
+  sight: { x: width*0.22, y: height*0.55 },
+  sound: { x: width*0.40, y: height*0.32 },
+  touch: { x: width*0.58, y: height*0.50 },
+  smell: { x: width*0.72, y: height*0.70 },
+  taste: { x: width*0.50, y: height*0.78 }
+};
+
+/* ripple용 가장 가까운 점 찾기 */
+function findClosestNode(mx, my) {
+  let min = Infinity;
+  let closest = null;
+  data.forEach(d => {
+    const dx = d.x - mx;
+    const dy = d.y - my;
+    const dist = dx*dx + dy*dy;
+    if (dist < min) {
+      min = dist;
+      closest = d;
+    }
+  });
+  return closest;
+}
+
+/* ripple force */
+function avoidMouseForce(radius) {
+  return function(alpha) {
+    const anchor = findClosestNode(mousePos.x, mousePos.y);
+    if (!anchor) return;
+    data.forEach(d => {
+      if (d === anchor) {
+        d.vx = 0;
+        d.vy = 0;
+        return;
+      }
+      const dx = d.x - anchor.x;
+      const dy = d.y - anchor.y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 0.001;
+      if (dist < radius) {
+        const repel = (radius - dist)/radius * alpha * 18;
+        d.vx += (dx/dist)*repel;
+        d.vy += (dy/dist)*repel;
+      }
+    });
+  }
+}
+
+/* force simulation – 전체 하나의 덩어리지만 내부 클러스터만 살짝 분리 */
+let sim = d3.forceSimulation(data)
+  .force("center", d3.forceCenter(width/2, height/2))
+  .force("clusterX", d3.forceX(d => {
+    if (d.isBlend) {
+      const c1 = senseCenters[d.c1];
+      const c2 = senseCenters[d.c2];
+      return (c1.x + c2.x)/2;
+    }
+    const c = senseCenters[dominantSense(d)];
+    return c.x;
+  }).strength(0.12))
+  .force("clusterY", d3.forceY(d => {
+    if (d.isBlend) {
+      const c1 = senseCenters[d.c1];
+      const c2 = senseCenters[d.c2];
+      return (c1.y + c2.y)/2;
+    }
+    const c = senseCenters[dominantSense(d)];
+    return c.y;
+  }).strength(0.16))
+  .force("collide", d3.forceCollide().radius(d => d.isBlend ? 5.5 : 6.2).strength(1.0))
+  .force("avoidMouse", avoidMouseForce(110))
+  .alpha(1)
+  .alphaDecay(0.02)
+  .on("tick", ticked);
+
+/* 점들 – 작게, 촘촘하게 */
+const nodes = g.selectAll("circle")
+  .data(data)
+  .enter()
+  .append("circle")
+  .attr("r", d => d.isBlend ? 4.7 : 5.5)
+  .attr("fill", d => d.isBlend
+    ? mixColors(senseColors[d.c1], senseColors[d.c2], d.ratio)
+    : senseColors[dominantSense(d)]
+  )
+  .attr("opacity", d => d.isBlend ? 0.8 : 0.9)
+  .style("cursor", "pointer")
+  .on("click", showPolaroid);
+
+function ticked() {
+  nodes
+    .attr("cx", d => d.x)
+    .attr("cy", d => d.y);
+}
+
+/* 마우스 이동 → ripple */
+svg.on("mousemove", (event) => {
+  const tr = d3.zoomTransform(svg.node());
+  const [mx, my] = tr.invert(d3.pointer(event));
+  mousePos = { x: mx, y: my };
+  sim.alphaTarget(0.18).restart();
+});
+
+/* 폴라로이드 */
+const polaroid = document.getElementById("polaroidCard");
+let activeNode = null;
+
+function showPolaroid(event, d) {
+  activeNode = d;
+  const [x, y] = d3.pointer(event);
+  polaroid.style.left = x + "px";
+  polaroid.style.top = y + "px";
+  document.getElementById("cardImg").src = d.img;
+  document.getElementById("cardCaption").innerText = d.scene;
+  polaroid.style.display = "block";
+  document.body.onclick = openPanelOnNextClick;
+}
+
+/* 두 번째 클릭 → 패널 */
+function openPanelOnNextClick() {
+  if (activeNode) {
+    openPanel(activeNode);
+    document.body.onclick = null;
+  }
+}
+
+const panel = document.getElementById("detailPanel");
+
+function openPanel(d) {
+  panel.classList.add("open");
+  document.getElementById("panelTitle").innerText = d.scene;
+  document.getElementById("panelImg").src = d.img;
+  document.getElementById("panelText").innerText = d.text;
+
+  const sensesList = [
+    { key: "시각", id: "sight", value: d.sight },
+    { key: "청각", id: "sound", value: d.sound },
+    { key: "촉각", id: "touch", value: d.touch },
+    { key: "미각", id: "taste", value: d.taste },
+    { key: "후각", id: "smell", value: d.smell }
+  ];
+
+  const container = document.getElementById("panelSenses");
+  container.innerHTML = "";
+
+  sensesList.forEach(s => {
+    const row = document.createElement("div");
+    row.className = "sense-bar";
+    row.innerHTML = `
+      <div class="sense-label">${s.key}</div>
+      <div class="sense-track">
+        <div class="sense-fill" style="width:${s.value}%; background:${senseColors[s.id]};"></div>
+      </div>
+      <div style="width:36px; text-align:right; font-size:0.8rem;">${s.value}%</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+/* 패널 닫기 */
+document.getElementById("closePanel").onclick = () => {
+  panel.classList.remove("open");
+  polaroid.style.display = "none";
+  activeNode = null;
+};
+</script>
+
+</body>
+</html>
